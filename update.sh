@@ -22,7 +22,7 @@ grab() {
     wget -q -O /tmp/pxe_openxt_index "http://${SERVER}/builds/${BRANCH}/?C=N;O=D"
     cat /tmp/pxe_openxt_index | grep "a href=\"${PREFIX}" | sed "s|.*a href=\"\(${PREFIX}-[0-9a-zA-Z-]\+\)/\".*|\1|" > /tmp/pxe_updating
 
-    # Download / keep 10 builds
+    # Download / keep ($MAX - $n) builds
     for build in `cat /tmp/pxe_updating`; do
 	[ $n -eq $MAX ] && break
 	if [ -d $build ]; then
@@ -51,11 +51,20 @@ grab() {
     done
 }
 
-grab "openxt.ainfosec.com" "master" "lxt-dev" 10
-grab "openxt.ainfosec.com:81" "master" "ext-dev" 20
+SERVER="158.69.227.117"
+
+# Current usage of the 20 entries:
+#   6 master
+#   6 custom master
+#   4 stable-5
+#   4 custom stable-5
+grab "$SERVER" "master" "oxt-dev" 6
+grab "$SERVER" "master" "custom-dev" 12
+grab "$SERVER" "stable-5" "oxt-dev" 16
+grab "$SERVER" "stable-5" "custom-dev" 20
 
 # Remove old builds
-for dir in `ls -d lxt-dev-*`; do
+for dir in `ls -d *-dev-*`; do
     grep $dir /tmp/pxe_added >/dev/null || grep $dir /tmp/pxe_kept > /dev/null || {
         rm -rf $dir
         echo $dir >> /tmp/pxe_removed
