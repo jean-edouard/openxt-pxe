@@ -10,6 +10,8 @@ touch /tmp/pxe_added /tmp/pxe_kept /tmp/pxe_removed
 
 n=0
 
+SAVE=
+
 grab() {
     SERVER=$1
     BRANCH=$2
@@ -47,7 +49,18 @@ grab() {
 					-e "s|xc-installer|${n}|" \
 					-e "s|@TFTP_PATH@/mboot.c32|mboot.c32|" \
 					-e "s|@TFTP_PATH@|openxt/${build}|g" >> pxelinux.cfg.new
-	echo "say ${n}: ${build}" >> pxelinux.cfg.new
+	npad=
+	[ $n -lt 10 ] && npad=" "
+	if [ -z "$SAVE" ]; then
+	    SAVE="${npad}${n}: ${build}"
+	else
+	    pad=
+	    for i in `seq ${#SAVE} 32`; do
+		pad="${pad} "
+	    done
+	    echo "say ${SAVE} ${pad} ${npad}${n}: ${build}" >> pxelinux.cfg.new
+	    SAVE=
+	fi
     done
 }
 
@@ -58,10 +71,13 @@ SERVER="158.69.227.117"
 #   6 custom master
 #   4 stable-5
 #   4 custom stable-5
-grab "$SERVER" "master" "oxt-dev" 6
-grab "$SERVER" "master" "custom-dev" 12
-grab "$SERVER" "stable-5" "oxt-dev" 16
-grab "$SERVER" "stable-5" "custom-dev" 20
+grab "$SERVER" "master" "oxt-dev" 12
+grab "$SERVER" "master" "custom-dev" 24
+grab "$SERVER" "stable-6" "oxt-dev" 30
+grab "$SERVER" "stable-6" "custom-dev" 36
+grab "$SERVER" "stable-5" "oxt-dev" 38
+grab "$SERVER" "stable-5" "custom-dev" 40
+[ -n "$SAVE" ] && echo "say ${SAVE}" >> pxelinux.cfg.new
 
 # Remove old builds
 for dir in `ls -d *-dev-*`; do
