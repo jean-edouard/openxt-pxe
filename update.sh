@@ -18,10 +18,12 @@ grab() {
     PREFIX=$3
     MAX=$4
 
+    BASE_URL="http://${SERVER}/builds/${BRANCH}"
+
     rm -rf /tmp/pxe_openxt_index /tmp/pxe_updating
 
     # Get the builds page and extract the build names
-    wget -q -O /tmp/pxe_openxt_index "http://${SERVER}/builds/${BRANCH}/?C=N;O=D"
+    wget -q -O /tmp/pxe_openxt_index "${BASE_URL}/?C=N;O=D"
     cat /tmp/pxe_openxt_index | grep "a href=\"${PREFIX}" | sed "s|.*a href=\"\(${PREFIX}-[0-9a-zA-Z-]\+\)/\".*|\1|" > /tmp/pxe_updating
 
     # Download / keep ($MAX - $n) builds
@@ -31,13 +33,13 @@ grab() {
 	    echo $build >> /tmp/pxe_kept
 	else
 	    mkdir $build
-	    wget -q -O ${build}/netboot.tar.gz "http://${SERVER}/builds/${BRANCH}/${build}/netboot/netboot.tar.gz" || {
+	    wget -q -O ${build}/netboot.tar.gz "${BASE_URL}/${build}/netboot/netboot.tar.gz" || {
 		rm -rf $build
 		continue
             }
 	    cd $build
 	    tar xzf netboot.tar.gz
-	    sed -i "s|@NETBOOT_URL@|http://${SERVER}/builds/${BRANCH}/${build}/repository|" *.ans
+	    sed -i "s|@NETBOOT_URL@|${BASE_URL}/${build}/repository|" *.ans
 	    cd - > /dev/null
 	    echo $build >> /tmp/pxe_added
 	fi
@@ -47,6 +49,8 @@ grab() {
 					-e '/^prompt/d' \
 					-e '/^timeout/d' \
 					-e "s|xc-installer|${n}|" \
+					-e "s|-manual$|-m|" \
+					-e "s|-upgrade$|-u|" \
 					-e "s|@TFTP_PATH@/mboot.c32|mboot.c32|" \
 					-e "s|@TFTP_PATH@|openxt/${build}|g" >> pxelinux.cfg.new
 	npad=
@@ -58,26 +62,76 @@ grab() {
 	    for i in `seq ${#SAVE} 32`; do
 		pad="${pad} "
 	    done
+	    echo >> pxelinux.cfg.new
 	    echo "say ${SAVE} ${pad} ${npad}${n}: ${build}" >> pxelinux.cfg.new
 	    SAVE=
 	fi
     done
 }
 
+grab_releases() {
+    SERVER=$1
+
+    BASE_URL="http://${SERVER}/releases"
+
+    rm -rf /tmp/pxe_openxt_index /tmp/pxe_updating
+
+    # Get the release names
+    wget -q -O /tmp/pxe_openxt_index "${BASE_URL}"
+    cat /tmp/pxe_openxt_index | grep 'a href="[0-9]' | sed 's|.*a href="\([^"]\+\)/".*|\1|' > /tmp/pxe_updating
+
+    for release in `cat /tmp/pxe_updating`; do
+	build=`wget -q -O - "${BASE_URL}/${release}" | grep 'a href="[a-zA-Z]' | sed 's|.*a href="\([0-9a-zA-Z-]\+\)/".*|\1|'`
+	if [ -d $release ]; then
+	    echo $release >> /tmp/pxe_kept
+	else
+	    mkdir $release
+	    wget -q -O ${release}/netboot.tar.gz "${BASE_URL}/${release}/${build}/netboot/netboot.tar.gz" || {
+		rm -rf $release
+		continue
+            }
+	    cd $release
+	    tar xzf netboot.tar.gz
+	    sed -i "s|@NETBOOT_URL@|${BASE_URL}/${release}/${build}/repository|" *.ans
+	    cd - > /dev/null
+	    echo $release >> /tmp/pxe_added
+	fi
+	cat ${release}/pxelinux.cfg | sed -e '/^serial/d' \
+		 			  -e '/^default/d' \
+					  -e '/^prompt/d' \
+					  -e '/^timeout/d' \
+					  -e "s|xc-installer|${release}|" \
+					  -e "s|-manual$|-m|" \
+					  -e "s|-upgrade$|-u|" \
+					  -e "s|@TFTP_PATH@/mboot.c32|mboot.c32|" \
+					  -e "s|@TFTP_PATH@|openxt/${release}|g" >> pxelinux.cfg.new
+    done
+}
+
 SERVER="158.69.227.117"
 
 # Current usage of the 20 entries:
-#   6 master
-#   6 custom master
-#   4 stable-5
-#   4 custom stable-5
-grab "$SERVER" "master" "oxt-dev" 12
-grab "$SERVER" "master" "custom-dev" 24
-grab "$SERVER" "stable-6" "oxt-dev" 30
-grab "$SERVER" "stable-6" "custom-dev" 36
-grab "$SERVER" "stable-5" "oxt-dev" 38
-grab "$SERVER" "stable-5" "custom-dev" 40
+#   10 master
+#   10 custom master
+#    6 stable-6
+#    6 custom stable-6
+#    2 stable-5
+#    2 custom stable-5
+#    2 stable-4
+#    2 custom-stable-4
+grab "$SERVER" "master" "oxt-dev" 10
+grab "$SERVER" "master" "custom-dev" 20
+grab "$SERVER" "stable-6" "oxt-dev" 26
+grab "$SERVER" "stable-6" "custom-dev" 32
+grab "$SERVER" "stable-5" "oxt-dev" 34
+grab "$SERVER" "stable-5" "custom-dev" 36
+grab "$SERVER" "stable-4" "oxt-dev" 38
+grab "$SERVER" "stable-4" "custom-dev" 40
+
+[ -n "$SAVE" ] && echo >> pxelinux.cfg.new
 [ -n "$SAVE" ] && echo "say ${SAVE}" >> pxelinux.cfg.new
+
+grab_releases "$SERVER"
 
 # Remove old builds
 for dir in `ls -d *-dev-*`; do
