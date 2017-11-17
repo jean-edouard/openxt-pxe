@@ -81,7 +81,7 @@ grab_generic() {
 	    tar xzf netboot.tar.gz
 	    rm netboot.tar.gz
 	    if [[ $MIRROR_REPOSITORIES -eq 1 ]]; then
-		sed -i "s|@NETBOOT_URL@|${MIRROR_URL}/builds/${build}|" *.ans
+		sed -i "s|@NETBOOT_URL@|${MIRROR_URL}/${build}|" *.ans
 	    else
 		sed -i "s|@NETBOOT_URL@|${BASE_URL}/${build}/repository|" *.ans
 	    fi
